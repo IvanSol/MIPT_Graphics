@@ -1,0 +1,47 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%           Exercise 16             %
+%      Author: Solomatin Ivan       %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+/dir {
+	/ang exch def
+	ang sin ang cos
+} def
+
+/scale {
+	/coef exch def
+	/y exch def
+	/x exch def
+	x coef mul y coef mul
+} def
+
+/mymove {
+	/dy exch def
+	/dx exch def
+	/y  exch def
+	/x  exch def
+	x dx add y dy add
+} def
+
+/polygon {
+	/n  exch def
+	/r  exch def
+	/y0 exch def
+	/x0 exch def
+
+	/step 360 n div def
+
+	0 dir r scale x0 y0 mymove moveto
+
+	step step 360 {
+		/angle exch def
+		angle dir r scale x0 y0 mymove lineto
+	} for
+
+} def
+
+%%%%%%%%%%%%%%main:%%%%%%%%%%%%%
+
+newpath 
+250 600 100 8 polygon
+stroke

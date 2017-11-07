@@ -1,0 +1,28 @@
+/ring {
+/r2  exch def
+/r1  exch def
+/y exch def
+/x exch def
+
+newpath
+x y r2 0 360 arc
+gsave
+0.5 0.5 0.5 setrgbcolor
+fill
+grestore
+stroke
+
+newpath
+x y r1 0 360 arc
+gsave
+1 1 1 setrgbcolor
+fill
+grestore
+stroke
+} def
+
+
+250 600 100 120 ring
+
+
+

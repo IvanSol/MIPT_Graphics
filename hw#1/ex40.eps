@@ -1,0 +1,43 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%           Exercise 40             %
+%      Author: Solomatin Ivan       %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+/gen_millimeter_paper{
+  0.4 0.4 1 setrgbcolor
+  /cm {28.34645 mul} def
+  /w  exch def
+  /h  exch def
+  /y0 exch def
+  /x0 exch def
+  
+  1 setlinewidth
+  0 1 h 1 sub {
+	/i exch def
+	0 1 w 1 sub {
+		/j exch def
+		newpath x0 j cm add y0 i cm add 1 cm 1 cm rectstroke
+	} for
+  } for
+  
+  0.5 setlinewidth
+  0 1 h 2 mul 1 sub {
+	/i exch def
+	0 1 w 2 mul 1 sub {
+		/j exch def
+		newpath x0 j cm 0.5 mul add y0 i cm 0.5 mul add 0.5 cm 0.5 cm rectstroke
+	} for
+  } for
+
+  0.2 setlinewidth
+  0 1 h 10 mul 1 sub {
+	/i exch def
+	0 1 w 10 mul 1 sub {
+		/j exch def
+		newpath x0 j cm 0.1 mul add y0 i cm 0.1 mul add 0.1 cm 0.1 cm rectstroke
+	} for
+  } for
+  0 0 0 setrgbcolor
+} def
+
+200 600 5 5 gen_millimeter_paper

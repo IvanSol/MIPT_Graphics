@@ -1,0 +1,36 @@
+/sect {
+/a2 	exch def
+/a1 	exch def
+/r2 	exch def
+/r1 	exch def
+/y  	exch def
+/x  	exch def
+
+newpath
+x y r2 a1 a2 arc
+x y r1 a2 a1 arcn
+x y r2 a1 a2 arc
+gsave
+1 1 0 setrgbcolor
+fill
+grestore
+stroke
+
+} def
+
+%%%%%%%%%%%%%%main:%%%%%%%%%%%%%
+
+/x  250 def
+/y  600 def
+/r1 50  def 
+/r2 100 def
+/a1 45 20 sub def
+/a2 45 20 add def
+
+newpath
+x y moveto
+x y r2 a1 a2 arc
+x y lineto
+stroke
+3 setlinewidth
+x y r1 r2 a1 a2 sect

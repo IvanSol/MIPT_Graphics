@@ -1,0 +1,281 @@
+/Times-Roman findfont % get the basic font
+12 scalefont % scale the font to 12 points
+setfont % make it the current font
+newpath
+20 820 moveto
+(Computer graphics. Task #1) show
+20 800 moveto
+(PostScript) show
+20 780 moveto
+(Solomatin Ivan. Group 274) show
+stroke
+
+/ex {
+	/text exch def
+	/y exch def
+	/x exch def
+	
+	/h 28 def
+	/w 9 6 text length mul add def
+	
+	newpath x y w h rectstroke
+	newpath
+	x 10 add y 10 add moveto
+	text show
+	stroke
+} def
+
+250 770 (Exercise 16) ex
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%           Exercise 16             %
+%      Author: Solomatin Ivan       %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+/dir {
+	/ang exch def
+	ang sin ang cos
+} def
+
+/scale {
+	/coef exch def
+	/y exch def
+	/x exch def
+	x coef mul y coef mul
+} def
+
+/mymove {
+	/dy exch def
+	/dx exch def
+	/y  exch def
+	/x  exch def
+	x dx add y dy add
+} def
+
+/polygon {
+	/n  exch def
+	/r  exch def
+	/y0 exch def
+	/x0 exch def
+
+	/step 360 n div def
+
+	0 dir r scale x0 y0 mymove moveto
+
+	step step 360 {
+		/angle exch def
+		angle dir r scale x0 y0 mymove lineto
+	} for
+
+} def
+
+%%%%%%%%%%%%%%main:%%%%%%%%%%%%%
+
+newpath 
+300 710 50 8 polygon
+stroke
+
+50 610 (Exercise 19.1) ex
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%           Exercise 19.1           %
+%      Author: Solomatin Ivan       %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+/ring {
+/r2  exch def
+/r1  exch def
+/y exch def
+/x exch def
+
+newpath
+x y r2 0 360 arc
+gsave
+0.5 0.5 0.5 setrgbcolor
+fill
+grestore
+stroke
+
+newpath
+x y r1 0 360 arc
+gsave
+1 1 1 setrgbcolor
+fill
+grestore
+stroke
+} def
+
+%%%%%%%%%%%%%%main:%%%%%%%%%%%%%
+
+95 540 25 40 ring
+
+250 610 (Exercise 19.2) ex
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%           Exercise 19.2           %
+%      Author: Solomatin Ivan       %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+/sect {
+/a2 exch def
+/a1 exch def
+/r2 exch def
+/r1 exch def
+/y  exch def
+/x  exch def
+
+newpath
+x y r2 a1 a2 arc
+x y r1 a2 a1 arcn
+x y r2 a1 a2 arc
+gsave
+0.4 0.4 1 setrgbcolor
+fill
+grestore
+stroke
+
+} def
+
+/x  300 def
+/y  520 def
+/r1 30  def 
+/r2 50 def
+/a1 0   def
+/a2 90  def
+
+x y r1 r2 a1 a2 sect
+
+450 610 (Exercise 19.3) ex
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%           Exercise 19.3           %
+%      Author: Solomatin Ivan       %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+/sect {
+/a2 	exch def
+/a1 	exch def
+/r2 	exch def
+/r1 	exch def
+/y  	exch def
+/x  	exch def
+
+newpath
+x y r2 a1 a2 arc
+x y r1 a2 a1 arcn
+x y r2 a1 a2 arc
+gsave
+1 1 0 setrgbcolor
+fill
+grestore
+stroke
+
+} def
+
+%%%%%%%%%%%%%%main:%%%%%%%%%%%%%
+
+/x  470 def
+/y  530 def
+/r1 30  def 
+/r2 50 def
+/a1 45 20 sub def
+/a2 45 20 add def
+
+newpath
+x y moveto
+x y r2 a1 a2 arc
+x y lineto
+stroke
+3 setlinewidth
+x y r1 r2 a1 a2 sect
+1 setlinewidth
+
+250 450 (Exercise 33) ex
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%           Exercise 33             %
+%      Author: Solomatin Ivan       %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+/circle{
+	newpath
+	/color	exch def
+	/r0 	exch def
+	/y0		exch def
+	/x0		exch def
+	x0 y0 moveto
+	x0 y0 r0 0 360 arc
+	color setgray
+	fill
+} def
+
+/shades_of_gray {
+	/d exch def
+	/n exch def
+	/y exch def
+	/x exch def
+	
+	/w n d mul 2 mul d add def
+	/h d 2 mul def
+	/r d 2 div def
+	
+	newpath x y w h rectstroke
+	/xstart x 1.5 d mul add def
+	/ystart y d add def
+	
+	0 1 n 1 sub {
+		/i exch def
+		/col i n div def
+		xstart i d mul 2 mul add ystart r col circle
+	} for
+	0 setgray
+} def
+
+100 400 20 10 shades_of_gray
+
+250 330 (Exercise 40) ex
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%           Exercise 40             %
+%      Author: Solomatin Ivan       %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+/gen_millimeter_paper{
+  0.4 0.4 1 setrgbcolor
+  /cm {28.34645 mul} def
+  /w  exch def
+  /h  exch def
+  /y  exch def
+  /x0 exch def
+  /y0 y h cm sub def
+  
+  1 setlinewidth
+  0 1 h 1 sub {
+	/i exch def
+	0 1 w 1 sub {
+		/j exch def
+		newpath x0 j cm add y0 i cm add 1 cm 1 cm rectstroke
+	} for
+  } for
+  
+  0.5 setlinewidth
+  0 1 h 2 mul 1 sub {
+	/i exch def
+	0 1 w 2 mul 1 sub {
+		/j exch def
+		newpath x0 j cm 0.5 mul add y0 i cm 0.5 mul add 0.5 cm 0.5 cm rectstroke
+	} for
+  } for
+
+  0.2 setlinewidth
+  0 1 h 10 mul 1 sub {
+	/i exch def
+	0 1 w 10 mul 1 sub {
+		/j exch def
+		newpath x0 j cm 0.1 mul add y0 i cm 0.1 mul add 0.1 cm 0.1 cm rectstroke
+	} for
+  } for
+  0 0 0 setrgbcolor
+} def
+
+160 320 5 9 gen_millimeter_paper

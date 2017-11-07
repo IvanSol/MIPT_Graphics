@@ -1,0 +1,40 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%           Exercise 33             %
+%      Author: Solomatin Ivan       %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+/circle{
+	newpath
+	/color	exch def
+	/r0 	exch def
+	/y0		exch def
+	/x0		exch def
+	x0 y0 moveto
+	x0 y0 r0 0 360 arc
+	color setgray
+	fill
+} def
+
+/shades_of_gray {
+	/d exch def
+	/n exch def
+	/y exch def
+	/x exch def
+	
+	/w n d mul 2 mul d add def
+	/h d 2 mul def
+	/r d 2 div def
+	
+	newpath x y w h rectstroke
+	/xstart x 1.5 d mul add def
+	/ystart y d add def
+	
+	0 1 n {
+		/i exch def
+		/col i n div def
+		xstart i d mul 2 mul add ystart r col circle
+	} for
+	
+} def
+
+50 600 20 10 shades_of_gray
