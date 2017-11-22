@@ -6,6 +6,7 @@ from OpenGL.GLUT import *
 from functools import reduce
 import sys
 import math
+import numpy as np
 
 INF = 1e+100
 
@@ -67,6 +68,8 @@ class triangle:
         self.points = [point() for i in range(3)]
 
     def draw(self):
+        col = np.random.uniform(0.0, 1.0, 3)
+        glColor3f(col[0], col[1], col[2])
         for p in self.points:
             p.draw()
 
@@ -147,7 +150,7 @@ class model:
 
 
 # Процедура инициализации
-def init(m):
+def init():
     global xrot         # Величина вращения по оси x
     global yrot         # Величина вращения по оси y
     global ambient      # Рассеянное освещение
@@ -156,15 +159,16 @@ def init(m):
     global lightpos     # Положение источника освещения
     global scale
 
-    scale = -3.0
+    scale = -1.0
     xrot = 0.0                          # Величина вращения по оси x = 0
     yrot = 0.0                          # Величина вращения по оси y = 0
     ambient = (1.0, 1.0, 1.0, 1)        # Первые три числа цвет в формате RGB, а последнее - яркость
     greencolor = (0.2, 0.8, 0.0, 0.8)   # Зеленый цвет для иголок
     treecolor = (0.9, 0.6, 0.3, 0.8)    # Коричневый цвет для ствола
-    #lightpos = (m.max[0] + 1.0, m.max[1] + 1.0, m.max[2] + 1.0)          # Положение источника освещения по осям xyz
-    lightpos = (1, 1, 1)
+    lightpos = (1.0, 1.0, 1.0)          # Положение источника освещения по осям xyz
+
     glClearColor(0.5, 0.5, 0.5, 1.0)                # Серый цвет для первоначальной закраски
+
     xmin, ymin, zmin = m.min
     xmax, ymax, zmax = m.max
 
@@ -183,8 +187,7 @@ def init(m):
     zmin = zmean - zd
     zmax = zmean + zd
 
-    #glOrtho(xmin - 1, xmax + 1, ymin - 1, ymax + 1, zmin - 1, zmax + 1)                # Определяем границы рисования по горизонтали и вертикали
-    gluOrtho2D(-1.0, 1.0, -1.0, 1.0)
+    glOrtho(xmin - 1, xmax + 1, ymin - 1, ymax + 1, zmin - 1, zmax + 1) # Определяем границы рисования по горизонтали и вертикали
     glRotatef(-90, 1.0, 0.0, 0.0)                   # Сместимся по оси Х на 90 градусов
     glLightModelfv(GL_LIGHT_MODEL_AMBIENT, ambient) # Определяем текущую модель освещения
     glEnable(GL_LIGHTING)                           # Включаем освещение
@@ -193,7 +196,7 @@ def init(m):
 
     glMatrixMode(GL_PROJECTION)
     gluPerspective(45.0, 1, 0.001, 100)
-    glEnable(GL_COLOR_MATERIAL)
+    #glEnable(GL_COLOR_MATERIAL)
 
 # Процедура обработки специальных клавиш
 def specialkeys(key, x, y):
@@ -230,18 +233,27 @@ def draw_model():
     global treecolor
     global scale
 
-    glClear(GL_COLOR_BUFFER_BIT)                                # Очищаем экран и заливаем серым цветом
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)                                # Очищаем экран и заливаем серым цветом
     glPushMatrix()                                              # Сохраняем текущее положение "камеры"
     glTranslatef(0, 0, scale)
     glRotatef(xrot, 1.0, 0.0, 0.0)                              # Вращаем по оси X на величину xrot
     glRotatef(yrot, 0.0, 1.0, 0.0)                              # Вращаем по оси Y на величину yrot
     glLightfv(GL_LIGHT0, GL_POSITION, lightpos)  # Источник света вращаем вместе с елкой
     glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, treecolor)
-    glutSolidCylinder(1, 1, 100, 100)
+    #glutSolidCylinder(1, 1, 100, 100)
     #glTranslatef(0, 0, 0)
-    #glBegin(GL_TRIANGLES)
-    #m.draw()
-    #glEnd()
+    glPolygonMode(GL_FRONT, GL_FILL)
+    glPolygonMode(GL_BACK, GL_FILL)
+    glBegin(GL_TRIANGLES)
+    m.draw()
+    glEnd()
+    glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, greencolor)
+
+    glPolygonMode(GL_FRONT, GL_LINE)
+    glPolygonMode(GL_BACK, GL_LINE)
+    glBegin(GL_TRIANGLES)
+    m.draw()
+    glEnd()
     '''
     glTranslatef(dx, dy, dz)
 
@@ -276,7 +288,7 @@ def main():
     if (not bool(glutInitDisplayMode)):
         raise ValueError("No GLUT installed. Unable to find GLUT dll.")
 
-    glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB)
+    glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA | GLUT_DEPTH)
     # Указываем начальный размер окна (ширина, высота)
     glutInitWindowSize(300, 300)
     # Указываем начальное положение окна относительно левого верхнего угла экрана
@@ -291,7 +303,7 @@ def main():
     glutSpecialFunc(specialkeys)
     glutKeyboardFunc(specialkeys)
     # Вызываем нашу функцию инициализации
-    init(m)
+    init()
     # Запускаем основной цикл
     glutMainLoop()
 
