@@ -17,6 +17,7 @@ global greencolor   # Цвет елочных иголок
 global treecolor    # Цвет елочного стебля
 global lightpos     # Положение источника освещения
 global m
+global scale
 
 def get_parsed_line(file):
     res = file.readline()
@@ -153,17 +154,16 @@ def init(m):
     global greencolor   # Цвет елочных иголок
     global treecolor    # Цвет елочного ствола
     global lightpos     # Положение источника освещения
-
     global scale
 
+    scale = -3.0
     xrot = 0.0                          # Величина вращения по оси x = 0
     yrot = 0.0                          # Величина вращения по оси y = 0
-    ambient = (1.0, 1.0, 1.0, 10)        # Первые три числа цвет в формате RGB, а последнее - яркость
+    ambient = (1.0, 1.0, 1.0, 1)        # Первые три числа цвет в формате RGB, а последнее - яркость
     greencolor = (0.2, 0.8, 0.0, 0.8)   # Зеленый цвет для иголок
     treecolor = (0.9, 0.6, 0.3, 0.8)    # Коричневый цвет для ствола
-    lightpos = (m.max[0] + 1.0, m.max[1] + 1.0, m.max[2] + 1.0)          # Положение источника освещения по осям xyz
-    scale = 1
-
+    #lightpos = (m.max[0] + 1.0, m.max[1] + 1.0, m.max[2] + 1.0)          # Положение источника освещения по осям xyz
+    lightpos = (1, 1, 1)
     glClearColor(0.5, 0.5, 0.5, 1.0)                # Серый цвет для первоначальной закраски
     xmin, ymin, zmin = m.min
     xmax, ymax, zmax = m.max
@@ -183,19 +183,22 @@ def init(m):
     zmin = zmean - zd
     zmax = zmean + zd
 
-    glOrtho(xmin - 1, xmax + 1, ymin - 1, ymax + 1, zmin - 1, zmax + 1)                # Определяем границы рисования по горизонтали и вертикали
+    #glOrtho(xmin - 1, xmax + 1, ymin - 1, ymax + 1, zmin - 1, zmax + 1)                # Определяем границы рисования по горизонтали и вертикали
+    gluOrtho2D(-1.0, 1.0, -1.0, 1.0)
     glRotatef(-90, 1.0, 0.0, 0.0)                   # Сместимся по оси Х на 90 градусов
     glLightModelfv(GL_LIGHT_MODEL_AMBIENT, ambient) # Определяем текущую модель освещения
     glEnable(GL_LIGHTING)                           # Включаем освещение
     glEnable(GL_LIGHT0)                             # Включаем один источник света
     glLightfv(GL_LIGHT0, GL_POSITION, lightpos)     # Определяем положение источника света
-    #glEnable(GL_COLOR_MATERIAL)
+
+    glMatrixMode(GL_PROJECTION)
+    gluPerspective(45.0, 1, 0.001, 100)
+    glEnable(GL_COLOR_MATERIAL)
 
 # Процедура обработки специальных клавиш
 def specialkeys(key, x, y):
     global xrot
     global yrot
-
     global scale
 
     #print key
@@ -211,9 +214,9 @@ def specialkeys(key, x, y):
         yrot += 2.0             # Увеличиваем угол вращения по оси Y
 
     if key == 'w':
-        scale *= 1.5
+        scale += 0.2
     if key == 's':
-        scale /= 1.5
+        scale -= 0.2
 
     glutPostRedisplay()         # Вызываем процедуру перерисовки
 
@@ -225,22 +228,20 @@ def draw_model():
     global lightpos
     global greencolor
     global treecolor
-
     global scale
 
     glClear(GL_COLOR_BUFFER_BIT)                                # Очищаем экран и заливаем серым цветом
     glPushMatrix()                                              # Сохраняем текущее положение "камеры"
-
+    glTranslatef(0, 0, scale)
     glRotatef(xrot, 1.0, 0.0, 0.0)                              # Вращаем по оси X на величину xrot
     glRotatef(yrot, 0.0, 1.0, 0.0)                              # Вращаем по оси Y на величину yrot
-    #glLightfv(GL_LIGHT0, GL_POSITION, lightpos)  # Источник света вращаем вместе с елкой
-
+    glLightfv(GL_LIGHT0, GL_POSITION, lightpos)  # Источник света вращаем вместе с елкой
     glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, treecolor)
-    #glutSolidCylinder(100, 100, 20, 20)
+    glutSolidCylinder(1, 1, 100, 100)
     #glTranslatef(0, 0, 0)
-    glBegin(GL_TRIANGLES)
-    m.draw()
-    glEnd()
+    #glBegin(GL_TRIANGLES)
+    #m.draw()
+    #glEnd()
     '''
     glTranslatef(dx, dy, dz)
 
@@ -281,7 +282,7 @@ def main():
     # Указываем начальное положение окна относительно левого верхнего угла экрана
     glutInitWindowPosition(50, 50)
     # Инициализация OpenGl
-    glutInit(sys.argv)
+    glutInit()
     # Создаем окно с заголовком "Happy New Year!"
     glutCreateWindow(b"Happy New Year!")
     # Определяем процедуру, отвечающую за перерисовку
