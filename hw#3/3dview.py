@@ -62,7 +62,7 @@ class normal:
                 return True
         else:
             data = input #just renaming
-            self.x, self.y, self.z = unpack("fff", data)
+            self.dx, self.dy, self.dz = unpack("fff", data)
             return True
 
     def as_vector(self):
@@ -122,9 +122,9 @@ class triangle:
     def get_coords(self, eps = None):
         return [p.get_coords(eps) for p in self.points]
 
-    def get_edges(self, eps):
-        return [(self.points[i].get_coords(eps = eps),
-                 self.points[(i + 1) % len(self.points)].get_coords(eps = eps))
+    def get_edges(self):
+        return [(self.points[i],
+                 self.points[(i + 1) % len(self.points)])
                  for i in range(len(self.points))]
 
     def calcNormal(self):
@@ -201,7 +201,7 @@ class triangle:
                 line = get_parsed_line(file)
                 if line != ['endfacet']:
                     raise ValueError('STL file corrupted. Expected "endfacet". Found: "%s"' % ' '.join(line))
-                return True
+                #return True
         else:
             data = file #just renaming
             self.norm.load(data[:self.norm.binary_len], mode)
@@ -210,6 +210,7 @@ class triangle:
                 self.points[i].load(data[pos : pos + self.points[i].binary_len], mode)
                 pos += self.points[i].binary_len
         self.norm.dx, self.norm.dy, self.norm.dz = self.calcNormal()
+        return True
 
 def edge_rev(edge):
     return (edge[1], edge[0])
@@ -263,7 +264,8 @@ class model:
         for t in self.triangles:
             t.normalize(norm_min, norm_max)
         self.eps /= abs_max - abs_min
-        print 'EPS = %.10f' % self.eps
+        #print 'EPS = %.10f' % self.eps
+        #print 'EPS = %.10f' % self.eps
 
 
     def calc_eps(self):
@@ -298,24 +300,26 @@ class model:
                                scale * math.cos(x_ang) * math.cos(y_ang)])
 
         if self.edges_dict == {}:
-            triangles_with_edges = [(t.get_edges(eps=self.eps), t) for t in self.triangles]
+            triangles_with_edges = [(t.get_edges(), t) for t in self.triangles]
             for t in triangles_with_edges:
-                for edge in t[0]:
+                for edge_pts in t[0]:
+                    edge = (edge_pts[0].get_coords(eps = self.eps),
+                            edge_pts[1].get_coords(eps = self.eps))
                     if (edge_rev(edge) in self.edges_dict.keys()):
                         edge = edge_rev(edge)
                     #optimizable:
                     if (edge in self.edges_dict.keys()):
-                        self.edges_dict[edge] += [t[1]]
+                        self.edges_dict[edge] += [(t[1], edge_pts)]
                     else:
-                        self.edges_dict[edge] = [t[1]]
+                        self.edges_dict[edge] = [(t[1], edge_pts)]
 
         shape_list = []
-        for e, triangle_list in self.edges_dict.iteritems():
+        for e, points_n_triangle_list in self.edges_dict.iteritems():
             visibility = []
             border = []
             #if len(triangle_list) < 2:
             #    raise ValueError('Edge has only one triangle! The figure seems to be incomplete.')
-            for t in triangle_list:
+            for t, p01 in points_n_triangle_list:
                 mid = reduce(lambda a, b: a + b.as_vector(), t.points, np.zeros(3)) / 3 + camera_pos
                 sgn = sign(scalar_product(mid, t.norm.as_vector()))
                 #print t.get_coords(),
@@ -330,7 +334,7 @@ class model:
                     visibility += [False]
                     border += [True]
             if (not all(visibility)) and any(visibility):
-                shape_list += [point(*e[0]), point(*e[1])]
+                shape_list += [p01[0], p01[1]]
         #print "Shape_size = %d" % (len(shape_list) / 2)
         for p in shape_list:
             p.draw()
@@ -599,6 +603,6 @@ def main():
 if (__name__ == '__main__'):
     global m
     m = model(sys.argv[1])
-    print m.min
-    print m.max
+    #print m.min
+    #print m.max
     main()
