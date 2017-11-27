@@ -12,16 +12,14 @@ from struct import unpack
 INF = 1e+100
 
 # Объявляем все глобальные переменные
-global camera_params
 global greencolor   # Цвет елочных иголок
 global treecolor    # Цвет елочного стебля
 global lightpos     # Положение источника освещения
 global m
 global color
 global ambient  # рассеянное освещение
-global saving_mode
-global camera_params_saved
-
+perspective_angle = 45.0
+perspective = True
 camera_params_saved=[
 {
     'scale': -3.0,
@@ -33,6 +31,10 @@ camera_params_saved=[
     'xrot': 90.0,  # Величина вращения по оси x = 0
     'yrot': 0.0  # Величина вращения по оси y = 0
 }]
+while (len(camera_params_saved) < 10):
+    camera_params_saved.append(dict(camera_params_saved[0]))
+saving_mode = False
+camera_params = camera_params_saved[0]
 
 color1 = (0.9, 0.6, 0.3)
 color2 = (1, 1, 1)
@@ -385,6 +387,14 @@ class model:
         #else:
         #    raise ValueError('Input file is supposed to be binary STL. Binary STL is not supported yet.')
 
+def do_perspective_if_needed():
+    global perspective_angle
+    glMatrixMode(GL_PROJECTION)
+    glLoadIdentity()
+    if perspective:
+        gluPerspective(perspective_angle, 1, 0.001, 100)
+    else:
+        glOrtho(-1, 1, -1, 1, -5, 5)
 
 
 # Процедура инициализации
@@ -400,17 +410,7 @@ def init():
     global camera_params
     global saving_mode
     global camera_params_saved
-
-    saving_mode = False
-
-    while (len(camera_params_saved) < 10):
-        camera_params_saved.append(dict(camera_params_saved[0]))
-
-    camera_params = {
-        'scale': -3.0,
-        'xrot': 0.0,                          # Величина вращения по оси x = 0
-        'yrot': 0.0                          # Величина вращения по оси y = 0
-    }
+    global perspective
 
     ambient = (1.0, 1.0, 1.0, 1)        # Первые три числа цвет в формате RGB, а последнее - яркость
     greencolor = (0.2, 0.8, 0.0, 0.8)   # Зеленый цвет для иголок
@@ -420,7 +420,6 @@ def init():
 
     glClearColor(0.5, 0.5, 0.5, 1.0)                # Серый цвет для первоначальной закраски
 
-    #glOrtho(xmin - 1, xmax + 1, ymin - 1, ymax + 1, zmin - 1, zmax + 1) # Определяем границы рисования по горизонтали и вертикали
     #glRotatef(-90, 1.0, 0.0, 0.0)                   # Сместимся по оси Х на 90 градусов
 
     BRIGHT4f = (1.0, 1.0, 1.0, 10.0)  # Color for Bright light
@@ -438,8 +437,8 @@ def init():
     glEnable(GL_LIGHT0)
     glEnable(GL_LIGHTING)
 
-    glMatrixMode(GL_PROJECTION)
-    gluPerspective(45.0, 1, 0.001, 100)
+    do_perspective_if_needed()
+
     glEnable(GL_COLOR_MATERIAL)
     glEnable(GL_DEPTH_TEST)  # Ensure farthest polygons render first
     glEnable(GL_NORMALIZE)  # Prevents scale from affecting color
@@ -453,7 +452,8 @@ def specialkeys(key, x, y):
     global camera_params
     global saving_mode
     global camera_params_saved
-
+    global perspective
+    global perspective_angle
     #print key
 
     if key == 'q':
@@ -480,9 +480,16 @@ def specialkeys(key, x, y):
         if key == GLUT_KEY_RIGHT:   # Клавиша вправо
             camera_params['yrot'] += rotation_delta             # Увеличиваем угол вращения по оси Y
 
-        if (key == 'w') or (key == '+'):
+        if (key == 'w'):
+            perspective_angle -= 1
+            do_perspective_if_needed()
+        if (key == 's'):
+            perspective_angle += 1
+            do_perspective_if_needed()
+
+        if (key == '+'):
             camera_params['scale'] += 0.2
-        if (key == 's') or (key == '-'):
+        if (key == '-'):
             camera_params['scale'] -= 0.2
         if key == 'x':
             m.to_draw_lines = not m.to_draw_lines
@@ -495,6 +502,9 @@ def specialkeys(key, x, y):
         if key == 'z':
             if m.line_width > 1:
                 m.line_width -= 1
+        if key == 'p':
+            perspective = not perspective
+            do_perspective_if_needed()
     glutPostRedisplay()         # Вызываем процедуру перерисовки
 
 # Процедура перерисовки
@@ -510,13 +520,14 @@ def draw_model():
     scale = camera_params['scale']
 
     glMatrixMode(GL_MODELVIEW)
-    glLoadIdentity()
+    #glLoadIdentity()
 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
     if saving_mode:
         s1 = 'Saving mode'
         s2 = 'Choose number from 0 to 9 to save camera position'
-        glDisable(GL_TEXTURE_2D)
+        glColor3f(0, 0, 0)
+        #glDisable(GL_TEXTURE_2D)
         glRasterPos3f(-0.008, 0.0, -0.1)
         for c in s1:
             glutBitmapCharacter(GLUT_BITMAP_TIMES_ROMAN_24, ord(c))
@@ -529,7 +540,8 @@ def draw_model():
     glPushMatrix()                                              # Сохраняем текущее положение "камеры"
     # Очищаем экран и заливаем серым цветом
     #glLightfv(GL_LIGHT0, GL_POSITION, (0, 0, 0))  # Источник света вращаем вместе с елкой
-    glTranslatef(0, 0, scale)
+    if perspective:
+        glTranslatef(0, 0, scale)
     glRotatef(xrot, 1.0, 0.0, 0.0)                              # Вращаем по оси X на величину xrot
     glRotatef(yrot, 0.0, 1.0, 0.0)                              # Вращаем по оси Y на величину yrot
     #glLightfv(GL_LIGHT0, GL_POSITION, (0, 1, 0, 0))
@@ -587,7 +599,7 @@ def main():
     # Инициализация OpenGl
     glutInit()
     # Создаем окно с заголовком "Happy New Year!"
-    glutCreateWindow(sys.argv[1])
+    glutCreateWindow(None)
     # Определяем процедуру, отвечающую за перерисовку
     glutDisplayFunc(draw_model)
     # Определяем процедуру, отвечающую за обработку клавиш
