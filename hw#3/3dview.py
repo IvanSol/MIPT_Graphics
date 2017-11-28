@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-# Импортируем все необходимые библиотеки:
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGL.GLUT import *
@@ -10,41 +9,109 @@ import numpy as np
 from struct import unpack
 
 INF = 1e+100
+scale = -3
+user_pos_default = np.array([0, 0, scale])
 
-# Объявляем все глобальные переменные
-global greencolor   # Цвет елочных иголок
-global treecolor    # Цвет елочного стебля
-global lightpos     # Положение источника освещения
+def Quaternion_from_angle(angle, x, y, z):
+    v = np.array([x, y, z])
+    v /= (v*v).sum()
+    x, y, z = v
+    angle /= 2
+    w = math.cos(angle)
+    x = x * math.sin(angle)
+    y = y * math.sin(angle)
+    z = z * math.sin(angle)
+    return Quaternion(w, x, y, z)
+
+class Quaternion:
+    def __init__(self, w, x, y, z):
+        self.coords = np.array([w, x, y, z], dtype=np.float64)
+
+    def rotate_vector(self, v):
+        v_q = Quaternion(0, *v)
+        res = self * v_q * self.get_inverted()
+        return res.coords[1:]
+
+    def get_camera_pos(self):
+        return self.get_inverted().rotate_vector(user_pos_default)
+
+    def apply(self):
+        angle = math.acos(self.coords[0]) * 2 / math.pi * 180
+        glRotate(angle, *self.coords[1:])
+
+    def len(self):
+        return math.sqrt((self.coords * self.coords).sum())
+
+    def norm(self):
+        l = self.len()
+        if abs(l) > 1e-8:
+            self.coords /= l
+
+    def invert(self):
+        self.coords[1:] = -self.coords[1:]
+        self.norm()
+
+    def get_inverted(self):
+        inv = Quaternion(*self.coords)
+        inv.coords[1:] = -inv.coords[1:]
+        inv.norm()
+        return inv
+
+    def __mul__(self, other):
+        w0, x0, y0, z0 = self.coords
+        w1, x1, y1, z1 = other.coords
+        return Quaternion(w0*w1 - x0*x1 - y0*y1 - z0*z1,
+                          w0*x1 + x0*w1 + y0*z1 - z0*y1,
+                          w0*y1 - x0*z1 + y0*w1 + z0*x1,
+                          w0*z1 + x0*y1 - y0*x1 + z0*w1)
+
+    def rotate_horizontal(self, delta):
+        horizontal_axis = self.get_inverted().rotate_vector(np.array([0, 1, 0]))
+        self.coords = (self * Quaternion_from_angle(delta, *horizontal_axis)).coords
+
+    def rotate_vertical(self, delta):
+        vertical_axis = self.get_inverted().rotate_vector(np.array([1, 0, 0]))
+        self.coords = (self * Quaternion_from_angle(delta, *vertical_axis)).coords
+
+def load_camera_params(i):
+    global camera_params
+    global camera_params_saved
+    if camera_params_saved[i] != {}:
+        camera_params = dict(camera_params_saved[i])
+        camera_params['Q'] = Quaternion(*camera_params_saved[i]['Q'].coords)
+
+def save_camera_params(i):
+    global camera_params
+    global camera_params_saved
+    camera_params_saved[i] = dict(camera_params)
+    camera_params_saved[i]['Q'] = Quaternion(*camera_params['Q'].coords)
+
+# Global variables:
 global m
-global color
-global ambient  # рассеянное освещение
-perspective_angle = 45.0
-perspective = True
+crazy_mode = False
 camera_params_saved=[
 {
-    'scale': -3.0,
-    'xrot': 0.0,  # Величина вращения по оси x = 0
-    'yrot': 0.0  # Величина вращения по оси y = 0
+    'perspective': True,
+    'perspective_angle': 45.0,
+    'Q': Quaternion_from_angle(0, 1, 0, 0)
 },
 {
-    'scale': -3.0,
-    'xrot': 90.0,  # Величина вращения по оси x = 0
-    'yrot': 0.0  # Величина вращения по оси y = 0
-}]
+    'perspective': True,
+    'perspective_angle': 45.0,
+    'Q': Quaternion_from_angle(math.pi / 2, 1, 0, 0)
+}] + [{}] * 8
 while (len(camera_params_saved) < 10):
     camera_params_saved.append(dict(camera_params_saved[0]))
 saving_mode = False
-camera_params = camera_params_saved[0]
-
-color1 = (0.9, 0.6, 0.3)
-color2 = (1, 1, 1)
-color2 = (1, 1, 1)
+global camera_params
+load_camera_params(0)
+show_axis = False
 
 def get_parsed_line(file):
     res = file.readline()
     while res[0] == '#':
         res = file.readline()
-    return res.replace('\n', '').split(' ');
+    return res.replace('\n', '').split(' ')
 
 class normal:
     binary_len = 12
@@ -81,8 +148,7 @@ class point:
     def as_vector(self):
         return np.array([self.x, self.y, self.z])
 
-    def draw(self, color=0):
-        #glColor3f(*color)
+    def draw(self):
         glVertex3f(self.x, self.y, self.z)
 
     def get_coords(self, eps = None):
@@ -142,30 +208,24 @@ class triangle:
         nx /= norm2
         ny /= norm2
         nz /= norm2
-        '''
-        print ('Triangle:')
-        print('%d %d %d' % (self.points[0].x, self.points[0].y, self.points[0].z))
-        print('%d %d %d' % (self.points[1].x, self.points[1].y, self.points[1].z))
-        print('%d %d %d' % (self.points[2].x, self.points[2].y, self.points[2].z))
-        print('Normal:')
-        print('%f %f %f' % (nx, ny, nz))
-        print
-        '''
+
         return np.array([nx, ny, nz])
 
-    def draw(self, mode, color):
-        #color = np.random.uniform(0, 1, 3)
+    def draw(self, mode):
+        if crazy_mode:
+            color = np.random.uniform(0, 1, 3)
+            glColor3f(*color)
         if mode == 'lines':
-            self.points[0].draw(color)
-            self.points[1].draw(color)
-            self.points[1].draw(color)
-            self.points[2].draw(color)
-            self.points[2].draw(color)
-            self.points[0].draw(color)
+            self.points[0].draw()
+            self.points[1].draw()
+            self.points[1].draw()
+            self.points[2].draw()
+            self.points[2].draw()
+            self.points[0].draw()
         else:
             glNormal3f(self.norm.dx, self.norm.dy, self.norm.dz)
             for p in self.points:
-                p.draw(color)
+                p.draw()
 
     def min(self):
         return [min(map(lambda x: x.x, self.points)),
@@ -285,21 +345,14 @@ class model:
         self.eps = min([dx, dy, dz]) / 10
 
 
-    def draw(self, mode, color):
+    def draw(self, mode):
         for t in self.triangles:
-            t.draw(mode, color)
+            t.draw(mode)
 
     def draw_shape(self):
         global camera_params
-        scale = camera_params['scale']
-        xrot = camera_params['xrot']
-        yrot = camera_params['yrot']
-
-        x_ang = xrot / 180 * math.pi
-        y_ang = yrot / 180 * math.pi
-        camera_pos = np.array([-scale * math.cos(x_ang) * math.sin(y_ang),
-                               scale * math.sin(x_ang),
-                               scale * math.cos(x_ang) * math.cos(y_ang)])
+        Q = camera_params['Q']
+        camera_pos = Q.get_camera_pos()
 
         if self.edges_dict == {}:
             triangles_with_edges = [(t.get_edges(), t) for t in self.triangles]
@@ -388,40 +441,24 @@ class model:
         #    raise ValueError('Input file is supposed to be binary STL. Binary STL is not supported yet.')
 
 def do_perspective_if_needed():
-    global perspective_angle
+    global camera_params
+    perspective_angle = camera_params['perspective_angle']
+    perspective = camera_params['perspective']
     glMatrixMode(GL_PROJECTION)
     glLoadIdentity()
     if perspective:
         gluPerspective(perspective_angle, 1, 0.001, 100)
     else:
-        glOrtho(-1, 1, -1, 1, -5, 5)
+        glOrtho(-1, 1, -1, 1, -10, 10)
 
 
 # Процедура инициализации
 def init():
-    global xrot         # Величина вращения по оси x
-    global yrot         # Величина вращения по оси y
-    global scale
-    global ambient      # Рассеянное освещение
-    global greencolor   # Цвет елочных иголок
-    global treecolor    # Цвет елочного ствола
-    global lightpos     # Положение источника освещения
-    global color
     global camera_params
     global saving_mode
     global camera_params_saved
     global perspective
-
-    ambient = (1.0, 1.0, 1.0, 1)        # Первые три числа цвет в формате RGB, а последнее - яркость
-    greencolor = (0.2, 0.8, 0.0, 0.8)   # Зеленый цвет для иголок
-    treecolor = (0.9, 0.6, 0.3, 0.8)    # Коричневый цвет для ствола
-    #lightpos = (10.0, 10.0, 10.0)          # Положение источника освещения по осям xyz
-    color = treecolor
-
-    glClearColor(0.5, 0.5, 0.5, 1.0)                # Серый цвет для первоначальной закраски
-
-    #glRotatef(-90, 1.0, 0.0, 0.0)                   # Сместимся по оси Х на 90 градусов
-
+    glClearColor(0.5, 0.5, 0.5, 1.0)
     BRIGHT4f = (1.0, 1.0, 1.0, 10.0)  # Color for Bright light
     DIM4f = (.2, .2, .2, 1.0)        # Color for Dim light
 
@@ -442,9 +479,8 @@ def init():
     glEnable(GL_COLOR_MATERIAL)
     glEnable(GL_DEPTH_TEST)  # Ensure farthest polygons render first
     glEnable(GL_NORMALIZE)  # Prevents scale from affecting color
-    glLightModelf(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
+    glLightModelf(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE)
 
-# Процедура обработки специальных клавиш
 def is_a_number(chr):
     return (chr >= '0') and (chr <= '9')
 
@@ -452,8 +488,8 @@ def specialkeys(key, x, y):
     global camera_params
     global saving_mode
     global camera_params_saved
-    global perspective
-    global perspective_angle
+    global crazy_mode
+    global show_axis
     #print key
 
     if key == 'q':
@@ -462,35 +498,34 @@ def specialkeys(key, x, y):
         key = int(key)
         if not saving_mode:
             if key < len(camera_params_saved):
-                camera_params = dict(camera_params_saved[key])
+                load_camera_params(key)
         else:
-            camera_params_saved[key] = dict(camera_params)
+            save_camera_params(key)
             saving_mode = False
 
     if not saving_mode:
         # Обработчики для клавиш со стрелками
-        rotation_delta = 10.0
+        rotation_delta = math.pi / 20
 
         if key == GLUT_KEY_UP:      # Клавиша вверх
-            camera_params['xrot'] -= rotation_delta             # Уменьшаем угол вращения по оси Х
+            camera_params['Q'].rotate_vertical(rotation_delta)
         if key == GLUT_KEY_DOWN:    # Клавиша вниз
-            camera_params['xrot'] += rotation_delta             # Увеличиваем угол вращения по оси Х
+            camera_params['Q'].rotate_vertical(-rotation_delta)
         if key == GLUT_KEY_LEFT:    # Клавиша влево
-            camera_params['yrot'] -= rotation_delta             # Уменьшаем угол вращения по оси Y
+            camera_params['Q'].rotate_horizontal(rotation_delta)
         if key == GLUT_KEY_RIGHT:   # Клавиша вправо
-            camera_params['yrot'] += rotation_delta             # Увеличиваем угол вращения по оси Y
+            camera_params['Q'].rotate_horizontal(-rotation_delta)
 
-        if (key == 'w'):
-            perspective_angle -= 1
+        if (key == 'w') or (key == '+'):
+            camera_params['perspective_angle'] -= 1
             do_perspective_if_needed()
-        if (key == 's'):
-            perspective_angle += 1
+        if (key == 's') or (key == '-'):
+            camera_params['perspective_angle'] += 1
             do_perspective_if_needed()
 
-        if (key == '+'):
-            camera_params['scale'] += 0.2
-        if (key == '-'):
-            camera_params['scale'] -= 0.2
+        if (key == 'o'):
+            crazy_mode = not crazy_mode
+
         if key == 'x':
             m.to_draw_lines = not m.to_draw_lines
         if key == 'b':
@@ -503,21 +538,18 @@ def specialkeys(key, x, y):
             if m.line_width > 1:
                 m.line_width -= 1
         if key == 'p':
-            perspective = not perspective
+            camera_params['perspective'] = not camera_params['perspective']
             do_perspective_if_needed()
-    glutPostRedisplay()         # Вызываем процедуру перерисовки
+        if key == 'a':
+            show_axis = not show_axis
+    glutPostRedisplay()
 
-# Процедура перерисовки
 def draw_model():
-    global lightpos
-    global greencolor
-    global treecolor
     global camera_params
     global saving_mode
+    global show_axis
 
-    xrot = camera_params['xrot']
-    yrot = camera_params['yrot']
-    scale = camera_params['scale']
+    Q = camera_params['Q']
 
     glMatrixMode(GL_MODELVIEW)
     #glLoadIdentity()
@@ -537,41 +569,43 @@ def draw_model():
         glutSwapBuffers()
         return
 
-    glPushMatrix()                                              # Сохраняем текущее положение "камеры"
-    # Очищаем экран и заливаем серым цветом
-    #glLightfv(GL_LIGHT0, GL_POSITION, (0, 0, 0))  # Источник света вращаем вместе с елкой
-    if perspective:
+    glPushMatrix()
+
+    if camera_params['perspective']:
         glTranslatef(0, 0, scale)
-    glRotatef(xrot, 1.0, 0.0, 0.0)                              # Вращаем по оси X на величину xrot
-    glRotatef(yrot, 0.0, 1.0, 0.0)                              # Вращаем по оси Y на величину yrot
-    #glLightfv(GL_LIGHT0, GL_POSITION, (0, 1, 0, 0))
-    #glutSolidCylinder(1, 1, 100, 100)
-    #glTranslatef(0, 0, 0)
+    Q.apply()
+    #glRotatef(xrot, 1.0, 0.0, 0.0)
+    #glRotatef(yrot, 0.0, 1.0, 0.0)
+
+    if show_axis:
+        glLineWidth(3)
+        glBegin(GL_LINES)
+        glColor3f(1, 0, 0)
+        glVertex3f(0, 0, 0)
+        glVertex3f(1, 0, 0)
+        glColor3f(0, 1, 0)
+        glVertex3f(0, 0, 0)
+        glVertex3f(0, 1, 0)
+        glColor3f(0, 0, 1)
+        glVertex3f(0, 0, 0)
+        glVertex3f(0, 0, 1)
+        glEnd()
+
+
     glPolygonMode(GL_FRONT, GL_FILL)
     glPolygonMode(GL_BACK, GL_FILL)
-
-    #glMaterial(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, (.25, .25, .25, 1.0))
-    #glMaterial(GL_FRONT, GL_SPECULAR, (1.0, 1.0, 1.0, .5))
-    #glMaterial(GL_FRONT, GL_SHININESS, (128.0, ))
-    #glMaterial(GL_BACK, GL_AMBIENT_AND_DIFFUSE, (0., 0., 0., 0.))
-    #glMaterial(GL_BACK, GL_SPECULAR, (0., 0., 0., 0.))
-    #glMaterial(GL_BACK, GL_SHININESS, (0.,))
-
-    #glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, treecolor)
 
     if m.to_draw_surface:
         glColor4f(0, 0.5, 0.5, 0)
         glBegin(GL_TRIANGLES)
-        m.draw(mode='triangles', color = color1)
+        m.draw(mode='triangles')
         glEnd()
-    #glPolygonMode(GL_FRONT, GL_LINE)
-    #glPolygonMode(GL_BACK, GL_LINE)
-    #'''
+
     if m.to_draw_lines:
         glColor3f(0, 1.0, 0)
         glLineWidth(m.line_width)
         glBegin(GL_LINES)
-        m.draw(mode='lines', color = color2)
+        m.draw(mode='lines')
         glEnd()
 
     if m.to_draw_shape:
@@ -580,13 +614,11 @@ def draw_model():
         glBegin(GL_LINES)
         m.draw_shape()
         glEnd()
-    #'''
-    #glDisable(GL_LIGHT0)
-    glPopMatrix()                                               # Возвращаем сохраненное положение "камеры"
-    glutSwapBuffers()                                           # Выводим все нарисованное в памяти на экран
+
+    glPopMatrix()
+    glutSwapBuffers()
 
 def main():
-    # Здесь начинается выполнение программы
     # Использовать двойную буферизацию и цвета в формате RGB (Красный, Зеленый, Синий)
     if (not bool(glutInitDisplayMode)):
         raise ValueError("No GLUT installed. Unable to find GLUT dll.")
@@ -598,8 +630,8 @@ def main():
     glutInitWindowPosition(50, 50)
     # Инициализация OpenGl
     glutInit()
-    # Создаем окно с заголовком "Happy New Year!"
-    glutCreateWindow(None)
+    # Создаем окно с заголовком - именем файла
+    glutCreateWindow(sys.argv[1])
     # Определяем процедуру, отвечающую за перерисовку
     glutDisplayFunc(draw_model)
     # Определяем процедуру, отвечающую за обработку клавиш
@@ -615,6 +647,4 @@ def main():
 if (__name__ == '__main__'):
     global m
     m = model(sys.argv[1])
-    #print m.min
-    #print m.max
     main()
