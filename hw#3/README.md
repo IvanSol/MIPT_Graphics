@@ -4,6 +4,7 @@ install_dependencies_unix.bash - для unix
 
 Использование:
 python <path_to_stl_model>
+
 Программа работает как с бинарными STL, так и с ASCII.
 
 Управление:
