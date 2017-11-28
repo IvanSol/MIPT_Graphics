@@ -99,13 +99,22 @@ camera_params_saved=[
     'perspective': True,
     'perspective_angle': 45.0,
     'Q': Quaternion_from_angle(math.pi / 2, 1, 0, 0)
-}] + [{}] * 8
+},
+{
+    'perspective': True,
+    'perspective_angle': 45.0,
+    'Q': Quaternion_from_angle(math.pi / 2, 0, 1, 0)
+}
+] + [{}] * 7
 while (len(camera_params_saved) < 10):
     camera_params_saved.append(dict(camera_params_saved[0]))
 saving_mode = False
 global camera_params
 load_camera_params(0)
 show_axis = False
+pair_mode = False
+w = 640
+h = 480
 
 def get_parsed_line(file):
     res = file.readline()
@@ -158,13 +167,10 @@ class point:
         else:
             return self.x, self.y, self.z
 
-    def normalize(self, v_min, v_max):
-        self.x -= (v_min[0] + v_max[0]) / 2
-        self.x /= (v_max[0] - v_min[0])
-        self.y -= (v_min[1] + v_max[1]) / 2
-        self.y /= (v_max[1] - v_min[1])
-        self.z -= (v_min[2] + v_max[2]) / 2
-        self.z /= (v_max[2] - v_min[2])
+    def normalize(self, scale, mean):
+        self.x = (self.x - mean[0]) * scale[0]
+        self.y = (self.y - mean[1]) * scale[1]
+        self.z = (self.z - mean[2]) * scale[2]
 
     def load(self, file, mode = 'ASCII'):
         if mode == 'ASCII':
@@ -236,9 +242,9 @@ class triangle:
                 max(map(lambda x: x.y, self.points)),
                 max(map(lambda x: x.z, self.points))]
 
-    def normalize(self, v_min, v_max):
+    def normalize(self, scale, mean):
         for p in self.points:
-            p.normalize(v_min, v_max)
+            p.normalize(scale, mean)
 
     def load(self, file, mode = 'ASCII'):
         if mode == 'ASCII':
@@ -316,16 +322,18 @@ class model:
                           [x.max() for x in self.triangles])
 
     def normalize(self, mode = 'uniform'):
-        norm_min = self.min
-        norm_max = self.max
-        abs_min = min(norm_min)
-        abs_max = max(norm_max)
+        norm_min = np.array(self.min)
+        norm_max = np.array(self.max)
+        scale = norm_max - norm_min
+        mean = (norm_max + norm_min) / 2
         if mode == 'uniform':
-            norm_min = [abs_min] * len(norm_min)
-            norm_max = [abs_max] * len(norm_max)
+            scale = 1.0 / np.repeat(scale.max(), len(scale))
+        else:
+            scale = 1.0 / scale
+
         for t in self.triangles:
-            t.normalize(norm_min, norm_max)
-        self.eps /= abs_max - abs_min
+            t.normalize(scale, mean)
+        self.eps *= scale.max()
         #print 'EPS = %.10f' % self.eps
         #print 'EPS = %.10f' % self.eps
 
@@ -440,16 +448,61 @@ class model:
         #else:
         #    raise ValueError('Input file is supposed to be binary STL. Binary STL is not supported yet.')
 
-def do_perspective_if_needed():
+    def draw_me(self):
+        if show_axis:
+            glLineWidth(3)
+            glBegin(GL_LINES)
+            glColor3f(1, 0, 0)
+            glVertex3f(0, 0, 0)
+            glVertex3f(1, 0, 0)
+            glColor3f(0, 1, 0)
+            glVertex3f(0, 0, 0)
+            glVertex3f(0, 1, 0)
+            glColor3f(0, 0, 1)
+            glVertex3f(0, 0, 0)
+            glVertex3f(0, 0, 1)
+            glEnd()
+
+        glPolygonMode(GL_FRONT, GL_FILL)
+        glPolygonMode(GL_BACK, GL_FILL)
+
+        if self.to_draw_surface:
+            glColor4f(0, 0.5, 0.5, 0)
+            glBegin(GL_TRIANGLES)
+            m.draw(mode='triangles')
+            glEnd()
+
+        if self.to_draw_lines:
+            glColor3f(0, 1.0, 0)
+            glLineWidth(m.line_width)
+            glBegin(GL_LINES)
+            m.draw(mode='lines')
+            glEnd()
+
+        if self.to_draw_shape:
+            glColor3f(1.0, 0, 0)
+            glLineWidth(m.line_width)
+            glBegin(GL_LINES)
+            m.draw_shape()
+            glEnd()
+
+
+def do_perspective_if_needed(move_ortho = False):
     global camera_params
     perspective_angle = camera_params['perspective_angle']
     perspective = camera_params['perspective']
     glMatrixMode(GL_PROJECTION)
     glLoadIdentity()
+    glViewport(0, 0, w, h)
     if perspective:
-        gluPerspective(perspective_angle, 1, 0.001, 100)
+        gluPerspective(perspective_angle, (float(w)) / h, 0.001, 100)
     else:
-        glOrtho(-1, 1, -1, 1, -10, 10)
+        rate_w = float(w) / (640 / 2)
+        rate_h = float(h) / (480 / 2)
+        if move_ortho:
+            glOrtho(-0.5 * rate_w, 2.5 * rate_w, -1.5 * rate_h, 1.5 * rate_h, -10, 10)
+        else:
+            glOrtho(-1 * rate_w, 1 * rate_w, -1 * rate_h, 1 * rate_h, -10, 10)
 
 
 # Процедура инициализации
@@ -490,9 +543,10 @@ def specialkeys(key, x, y):
     global camera_params_saved
     global crazy_mode
     global show_axis
+    global pair_mode
+    key = key.lower()
     #print key
-
-    if key == 'q':
+    if key == 's':
         saving_mode = not saving_mode
     if is_a_number(key):
         key = int(key)
@@ -516,32 +570,33 @@ def specialkeys(key, x, y):
         if key == GLUT_KEY_RIGHT:   # Клавиша вправо
             camera_params['Q'].rotate_horizontal(-rotation_delta)
 
-        if (key == 'w') or (key == '+'):
+        if (key == '+'):
             camera_params['perspective_angle'] -= 1
             do_perspective_if_needed()
-        if (key == 's') or (key == '-'):
+        if (key == '-'):
             camera_params['perspective_angle'] += 1
             do_perspective_if_needed()
 
-        if (key == 'o'):
-            crazy_mode = not crazy_mode
-
-        if key == 'x':
+        if key == 'c':
             m.to_draw_lines = not m.to_draw_lines
         if key == 'b':
             m.to_draw_surface = not m.to_draw_surface
         if key == 'v':
             m.to_draw_shape = not m.to_draw_shape
-        if key == 'c':
+        if key == 'x':
             m.line_width += 1
         if key == 'z':
             if m.line_width > 1:
                 m.line_width -= 1
-        if key == 'p':
+        if key == 'q':
             camera_params['perspective'] = not camera_params['perspective']
             do_perspective_if_needed()
+        if key == 'w':
+            pair_mode = not pair_mode
         if key == 'a':
             show_axis = not show_axis
+        if key == 'e':
+            crazy_mode = not crazy_mode
     glutPostRedisplay()
 
 def draw_model():
@@ -569,54 +624,38 @@ def draw_model():
         glutSwapBuffers()
         return
 
-    glPushMatrix()
 
+    glPushMatrix()
+    if pair_mode:
+        glTranslate(-1, 0, 0)
     if camera_params['perspective']:
         glTranslatef(0, 0, scale)
+    do_perspective_if_needed()
+    glMatrixMode(GL_MODELVIEW)
     Q.apply()
-    #glRotatef(xrot, 1.0, 0.0, 0.0)
-    #glRotatef(yrot, 0.0, 1.0, 0.0)
-
-    if show_axis:
-        glLineWidth(3)
-        glBegin(GL_LINES)
-        glColor3f(1, 0, 0)
-        glVertex3f(0, 0, 0)
-        glVertex3f(1, 0, 0)
-        glColor3f(0, 1, 0)
-        glVertex3f(0, 0, 0)
-        glVertex3f(0, 1, 0)
-        glColor3f(0, 0, 1)
-        glVertex3f(0, 0, 0)
-        glVertex3f(0, 0, 1)
-        glEnd()
-
-
-    glPolygonMode(GL_FRONT, GL_FILL)
-    glPolygonMode(GL_BACK, GL_FILL)
-
-    if m.to_draw_surface:
-        glColor4f(0, 0.5, 0.5, 0)
-        glBegin(GL_TRIANGLES)
-        m.draw(mode='triangles')
-        glEnd()
-
-    if m.to_draw_lines:
-        glColor3f(0, 1.0, 0)
-        glLineWidth(m.line_width)
-        glBegin(GL_LINES)
-        m.draw(mode='lines')
-        glEnd()
-
-    if m.to_draw_shape:
-        glColor3f(1.0, 0, 0)
-        glLineWidth(m.line_width)
-        glBegin(GL_LINES)
-        m.draw_shape()
-        glEnd()
-
+    m.draw_me()
     glPopMatrix()
+
+    if pair_mode:
+        glPushMatrix()
+        glTranslate(1, 0, 0)
+        camera_params['perspective'] = not camera_params['perspective']
+        if camera_params['perspective']:
+            glTranslatef(0, 0, scale)
+        do_perspective_if_needed()
+        glMatrixMode(GL_MODELVIEW)
+        Q.apply()
+        m.draw_me()
+        glPopMatrix()
+        camera_params['perspective'] = not camera_params['perspective']
+
     glutSwapBuffers()
+
+def Reshape(width, height):
+    global w
+    global h
+    w = width
+    h = height
 
 def main():
     # Использовать двойную буферизацию и цвета в формате RGB (Красный, Зеленый, Синий)
@@ -625,7 +664,7 @@ def main():
 
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA | GLUT_DEPTH)
     # Указываем начальный размер окна (ширина, высота)
-    glutInitWindowSize(640, 480)
+    glutInitWindowSize(w, h)
     # Указываем начальное положение окна относительно левого верхнего угла экрана
     glutInitWindowPosition(50, 50)
     # Инициализация OpenGl
@@ -637,6 +676,7 @@ def main():
     # Определяем процедуру, отвечающую за обработку клавиш
     glutSpecialFunc(specialkeys)
     glutKeyboardFunc(specialkeys)
+    glutReshapeFunc(Reshape)
     # Вызываем нашу функцию инициализации
     init()
     draw_model()
@@ -647,4 +687,7 @@ def main():
 if (__name__ == '__main__'):
     global m
     m = model(sys.argv[1])
+    for x1 in m.get_coords():
+        for x2 in x1:
+            print x2
     main()
