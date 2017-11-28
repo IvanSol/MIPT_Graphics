@@ -544,9 +544,10 @@ def specialkeys(key, x, y):
     global crazy_mode
     global show_axis
     global pair_mode
-    key = key.lower()
+    if key in ['B', 'С', 'V', 'Z', 'A', 'Q', 'E', 'W', 'S']:
+        key = key.lower()
     #print key
-    if key == 's':
+    if key in ['s']:
         saving_mode = not saving_mode
     if is_a_number(key):
         key = int(key)
