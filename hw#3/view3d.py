@@ -4,9 +4,11 @@ from OpenGL.GLU import *
 from OpenGL.GLUT import *
 from functools import reduce
 import sys
+import os
 import math
 import numpy as np
 from struct import unpack
+import pickle
 
 INF = 1e+100
 scale = -3
@@ -113,8 +115,8 @@ global camera_params
 load_camera_params(0)
 show_axis = False
 pair_mode = False
-w = 640
-h = 480
+w = 1920
+h = 1080
 
 def get_parsed_line(file):
     res = file.readline()
@@ -171,6 +173,9 @@ class point:
         self.x = (self.x - mean[0]) * scale[0]
         self.y = (self.y - mean[1]) * scale[1]
         self.z = (self.z - mean[2]) * scale[2]
+
+    def from_numpy(self, np_inp):
+        self.x, self.y, self.z = np_inp
 
     def load(self, file, mode = 'ASCII'):
         if mode == 'ASCII':
@@ -246,6 +251,11 @@ class triangle:
         for p in self.points:
             p.normalize(scale, mean)
 
+    def from_numpy(self, np_inp):
+        for i in range(np_inp.shape[0]):
+            self.points[i].from_numpy(np_inp[i])
+        self.norm.dx, self.norm.dy, self.norm.dz = self.calcNormal()
+
     def load(self, file, mode = 'ASCII'):
         if mode == 'ASCII':
             line = get_parsed_line(file)
@@ -297,7 +307,7 @@ def sign(x):
     return -1
 
 class model:
-    def __init__(self, filename = ''):
+    def __init__(self, filename = '', np_input=None):
         self.eps = 1e-2
         self.triangles = []
         self.n = 0
@@ -309,17 +319,37 @@ class model:
         self.min = [INF] * 3
         self.max = [-INF] * 3
         self.edges_dict = {}
+        self.pts = []
+        self.lns = []
         if (filename != ''):
             self.load(filename)
+        elif np_input is not None:
+            self.from_numpy(np_input)
 
     def get_coords(self, eps = None):
         return [t.get_coords(eps) for t in self.triangles]
 
+    def numpy_pickle(self, fn):
+        f = open(fn, 'w')
+        pickle.dump(np.array(self.get_coords()), f)
+        f.close()
+
     def set_min_max(self):
+        coords_t = np.array(self.get_coords(1e-9))
+        coords_t = coords_t.reshape((coords_t.size / 3, 3))
+        coords_p = np.array(map(lambda x: x.get_coords(1e-9), self.pts))
+        coords_p = coords_p.reshape((coords_p.size / 3, 3))
+        coords_l = np.array(map(lambda x: x.get_coords(1e-9), self.lns))
+        coords_l = coords_l.reshape((coords_l.size / 3, 3))
+        coords = np.concatenate([coords_t, coords_p, coords_l])
+        self.min = [coords[:, i].min() for i in range(3)]
+        self.max = [coords[:, i].max() for i in range(3)]
+        '''
         self.min = reduce(lambda a, b: list(map(min, a, b)), \
                           [x.min() for x in self.triangles])
         self.max = reduce(lambda a, b: list(map(max, a, b)), \
                           [x.max() for x in self.triangles])
+        '''
 
     def normalize(self, mode = 'uniform'):
         norm_min = np.array(self.min)
@@ -333,14 +363,24 @@ class model:
 
         for t in self.triangles:
             t.normalize(scale, mean)
+        for l in self.lns:
+            l.normalize(scale, mean)
+        for p in self.pts:
+            p.normalize(scale, mean)
         self.eps *= scale.max()
         #print 'EPS = %.10f' % self.eps
         #print 'EPS = %.10f' % self.eps
 
 
     def calc_eps(self):
-        coords = np.array(self.get_coords(1e-9))
-        coords = coords.reshape((coords.size / 3, 3))
+        coords_t = np.array(self.get_coords(1e-9))
+        coords_t = coords_t.reshape((coords_t.size / 3, 3))
+        coords_p = np.array(map(lambda x: x.get_coords(1e-9), self.pts))
+        coords_p = coords_p.reshape((coords_p.size / 3, 3))
+        coords_l = np.array(map(lambda x: x.get_coords(1e-9), self.lns))
+        coords_l = coords_l.reshape((coords_l.size / 3, 3))
+        coords = np.concatenate([coords_t, coords_p, coords_l])
+
         x = coords[:, 0]
         y = coords[:, 1]
         z = coords[:, 2]
@@ -356,6 +396,14 @@ class model:
     def draw(self, mode):
         for t in self.triangles:
             t.draw(mode)
+
+    def draw_pts(self):
+        for p in self.pts:
+            p.draw()
+
+    def draw_lines(self):
+        for p in self.lns:
+            p.draw()
 
     def draw_shape(self):
         global camera_params
@@ -404,6 +452,27 @@ class model:
 
     def show(self):
         pass
+
+    def from_numpy(self, inp):
+        self.name = 'Numpy model'
+        tr_inp = inp[0]
+        ln_inp = inp[1]
+        pt_inp = inp[2]
+
+        #assert tr_inp.shape[1] == 3, 'Unknown numpy shape'
+        self.n = tr_inp.shape[0]
+        for i in range(self.n):
+            t = triangle()
+            t.from_numpy(tr_inp[i])
+            self.triangles.append(t)
+
+        self.lns = [point(*ln_inp[i][j]) for j in range(2) for i in range(ln_inp.shape[0])]
+        self.pts = [point(*pt_inp[i]) for i in range(pt_inp.shape[0])]
+
+        print '%d triangles read' % self.n
+        self.calc_eps()
+        self.set_min_max()
+        self.normalize()
 
     def load(self, filename):
         mode = ''
@@ -472,6 +541,17 @@ class model:
             m.draw(mode='triangles')
             glEnd()
 
+        glColor3f(0, 0, 0)
+        glBegin(GL_POINTS)
+        m.draw_pts()
+        glEnd()
+
+        glLineWidth(4)
+        glColor3f(1, 0, 0)
+        glBegin(GL_LINES)
+        m.draw_lines()
+        glEnd()
+
         if self.to_draw_lines:
             glColor3f(0, 1.0, 0)
             glLineWidth(m.line_width)
@@ -533,6 +613,7 @@ def init():
     glEnable(GL_DEPTH_TEST)  # Ensure farthest polygons render first
     glEnable(GL_NORMALIZE)  # Prevents scale from affecting color
     glLightModelf(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE)
+    glPointSize(4)
 
 def is_a_number(chr):
     return (chr >= '0') and (chr <= '9')
@@ -598,6 +679,9 @@ def specialkeys(key, x, y):
             show_axis = not show_axis
         if key == 'e':
             crazy_mode = not crazy_mode
+        if key == ' ':
+            pickle.dump(camera_params, open('camera.pickle', 'w'))
+            glutLeaveMainLoop()
     glutPostRedisplay()
 
 def draw_model():
@@ -658,37 +742,52 @@ def Reshape(width, height):
     w = width
     h = height
 
+def visualize_model(model_numpy):
+    global m
+    m = model(np_input=model_numpy)
+    main()
+
 def main():
     # Использовать двойную буферизацию и цвета в формате RGB (Красный, Зеленый, Синий)
     if (not bool(glutInitDisplayMode)):
         raise ValueError("No GLUT installed. Unable to find GLUT dll.")
-
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA | GLUT_DEPTH)
     # Указываем начальный размер окна (ширина, высота)
     glutInitWindowSize(w, h)
     # Указываем начальное положение окна относительно левого верхнего угла экрана
-    glutInitWindowPosition(50, 50)
+    glutInitWindowPosition(0, 0)
     # Инициализация OpenGl
     glutInit()
+    # Запускаем основной цикл
+    glutSetOption(GLUT_ACTION_ON_WINDOW_CLOSE, GLUT_ACTION_GLUTMAINLOOP_RETURNS)
     # Создаем окно с заголовком - именем файла
-    glutCreateWindow(sys.argv[1])
+    winid = glutCreateWindow(sys.argv[1])
+    draw_model()
     # Определяем процедуру, отвечающую за перерисовку
     glutDisplayFunc(draw_model)
     # Определяем процедуру, отвечающую за обработку клавиш
+    glutSpecialFunc(specialkeys)
     glutSpecialFunc(specialkeys)
     glutKeyboardFunc(specialkeys)
     glutReshapeFunc(Reshape)
     # Вызываем нашу функцию инициализации
     init()
-    draw_model()
-    # Запускаем основной цикл
+
     glutMainLoop()
+    glutDestroyWindow(winid)
 
 
 if (__name__ == '__main__'):
     global m
-    m = model(sys.argv[1])
-    for x1 in m.get_coords():
-        for x2 in x1:
-            print x2
+    if sys.argv[1] == '-np':
+        global camera_params
+
+        if os.path.isfile('camera.pickle'):
+            f = open('camera.pickle')
+            camera_params = pickle.load(f)
+            f.close()
+        model_numpy = pickle.load(open(sys.argv[2]))
+        m = model(np_input=model_numpy)
+    else:
+        m = model(sys.argv[1])
     main()
