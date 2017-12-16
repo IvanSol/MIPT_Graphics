@@ -7,7 +7,7 @@ from itertools import combinations
 import pickle
 import random
 
-visualization_level = 4
+global visualization_level
 
 #sys.path.append(os.path.join('..', 'hw#3'))
 #from view3d import visualize_model
@@ -316,4 +316,15 @@ def quickHull(filename):
         print f.get_coords()
 
 if __name__ == '__main__':
+    global visualization_level
+
+    # level = 0 - show nothing
+    # level = 1 - show just result
+    # level = 2 - show initial points and result
+    # level = 3 - show initial points, result and horizons
+    # level = 4 - show initial points, result, horizons and hull after connecting new point to horizon.
+    visualization_level = 2
+
+    if (len(sys.argv) == 3):
+        visualization_level = int(sys.argv[2])
     quickHull(sys.argv[1])
