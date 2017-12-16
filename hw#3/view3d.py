@@ -466,7 +466,7 @@ class model:
             t.from_numpy(tr_inp[i])
             self.triangles.append(t)
 
-        self.lns = [point(*ln_inp[i][j]) for j in range(2) for i in range(ln_inp.shape[0])]
+        self.lns = [point(ln_inp[i][j][0], ln_inp[i][j][1], ln_inp[i][j][2]) for i in range(ln_inp.shape[0]) for j in range(2)]
         self.pts = [point(*pt_inp[i]) for i in range(pt_inp.shape[0])]
 
         print '%d triangles read' % self.n
